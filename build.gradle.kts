@@ -22,9 +22,15 @@ kotlin {
 }
 
 gradlePlugin {
-    plugins.create("publishing") {
-        id = "dev.nextftc.publishing"
-        implementationClass = "dev.nextftc.publishing.PublishingPlugin"
+    plugins {
+        create("publishing") {
+            id = "dev.nextftc.publishing"
+            implementationClass = "dev.nextftc.publishing.PublishingPlugin"
+        }
+        create("multi-module") {
+            id = "dev.nextftc.publishing.multi-module"
+            implementationClass = "dev.nextftc.publishing.MultiModulePlugin"
+        }
     }
 }
 

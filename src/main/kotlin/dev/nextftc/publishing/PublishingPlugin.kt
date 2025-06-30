@@ -8,9 +8,11 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.jetbrains.dokka.gradle.DokkaExtension
+import org.jetbrains.dokka.gradle.engine.plugins.DokkaHtmlPluginParameters
 import javax.inject.Inject
 
 open class PublishingExtension @Inject constructor(objects: ObjectFactory, project: Project) {
@@ -21,6 +23,7 @@ open class PublishingExtension @Inject constructor(objects: ObjectFactory, proje
         .convention(
             project.providers.gradleProperty("dev.nextftc.publishing.automaticMavenCentralSync").map(String::toBoolean)
         )
+    val logoPath = objects.property<String>().convention("assets/logo-icon.svg")
 }
 
 @Suppress("unused")
@@ -29,15 +32,26 @@ class PublishingPlugin : Plugin<Project> {
         project.pluginManager.apply("org.jetbrains.dokka")
         project.pluginManager.apply("io.deepmedia.tools.deployer")
 
-        project.extensions.configure<DokkaExtension> {
-            dokkaSourceSets.named("main") {
-                sourceRoots.from(project.file("src/main/kotlin"))
+        val extension = project.extensions.create<PublishingExtension>("nextFTCPublishing")
 
-                sourceLink {
-                    localDirectory.set(project.file("src/main/kotlin"))
-                    remoteUrl("https://github.com/NextFTC/NextFTC/blob/main/${project.name}/src/main/kotlin")
-                    remoteLineSuffix.set("#L")
+        project.extensions.configure<DokkaExtension> {
+            project.pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
+                dokkaSourceSets.named("main") {
+                    sourceRoots.from(project.file("src/main/kotlin"))
+
+                    sourceLink {
+                        localDirectory.set(project.file("src/main/kotlin"))
+                        remoteUrl("https://github.com/NextFTC/NextFTC/blob/main/${project.name}/src/main/kotlin")
+                        remoteLineSuffix.set("#L")
+                    }
                 }
+            }
+
+            moduleName.set(extension.displayName)
+
+            pluginsConfiguration.named<DokkaHtmlPluginParameters>("html") {
+                footerMessage.set("Copyright © 2025 NextFTC - Licensed under the GNU General Public License v3.0.")
+                customAssets.from(extension.logoPath)
             }
         }
 
@@ -47,58 +61,55 @@ class PublishingPlugin : Plugin<Project> {
             archiveClassifier.set("html-docs")
         }
 
+        project.extensions.configure<DeployerExtension> {
+            signing {
+                key.set(secret("MVN_GPG_KEY"))
+                password.set(secret("MVN_GPG_PASSWORD"))
+            }
 
-        val extension = project.extensions.create<PublishingExtension>("nextFTCPublishing")
-
-        project.afterEvaluate {
-            extensions.configure<DeployerExtension> {
-                projectInfo {
-                    name.set(extension.displayName)
-                    groupId.set(extension.group)
-                }
-
-                signing {
-                    key.set(secret("MVN_GPG_KEY"))
-                    password.set(secret("MVN_GPG_PASSWORD"))
-                }
-
-                content {
-                    pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
-                        kotlinComponents {
-                            kotlinSources()
-                            docs(dokkaJar)
-                        }
-                    }
-
-                    pluginManager.withPlugin("org.jetbrains.kotlin.android") {
-                        androidComponents("release") {
-                            kotlinSources()
-                            docs(dokkaJar)
-                        }
+            content {
+                project.pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
+                    kotlinComponents {
+                        kotlinSources()
+                        docs(dokkaJar)
                     }
                 }
 
-                localSpec {
-                    release.version.set("${extension.version}-LOCAL")
-                }
-
-                nexusSpec("snapshot") {
-                    release.version.set("${extension.version}-SNAPSHOT")
-                    repositoryUrl.set("https://central.sonatype.com/repository/maven-snapshots/")
-                    auth {
-                        user.set(secret("SONATYPE_USERNAME"))
-                        password.set(secret("SONATYPE_PASSWORD"))
+                project.pluginManager.withPlugin("org.jetbrains.kotlin.android") {
+                    androidComponents("release") {
+                        kotlinSources()
+                        docs(dokkaJar)
                     }
                 }
+            }
+        }
 
-                centralPortalSpec {
-                    release.version.set(extension.version)
-                    auth {
-                        user.set(secret("SONATYPE_USERNAME"))
-                        password.set(secret("SONATYPE_PASSWORD"))
-                    }
-                    allowMavenCentralSync.set(extension.automaticMavenCentralSync)
+        project.extensions.configure<DeployerExtension> {
+            projectInfo {
+                name.set(extension.displayName)
+                groupId.set(extension.group)
+            }
+
+            localSpec {
+                release.version.set("${extension.version}-LOCAL")
+            }
+
+            nexusSpec("snapshot") {
+                release.version.set("${extension.version}-SNAPSHOT")
+                repositoryUrl.set("https://central.sonatype.com/repository/maven-snapshots/")
+                auth {
+                    user.set(secret("SONATYPE_USERNAME"))
+                    password.set(secret("SONATYPE_PASSWORD"))
                 }
+            }
+
+            centralPortalSpec {
+                release.version.set(extension.version)
+                auth {
+                    user.set(secret("SONATYPE_USERNAME"))
+                    password.set(secret("SONATYPE_PASSWORD"))
+                }
+                allowMavenCentralSync.set(extension.automaticMavenCentralSync)
             }
         }
     }
