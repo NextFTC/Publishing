@@ -90,12 +90,13 @@ class PublishingPlugin : Plugin<Project> {
                 groupId.set(extension.group)
             }
 
-            localSpec {
-                release.version.set("${extension.version}-LOCAL")
+            release {
+                version.set(extension.version)
             }
 
+            localSpec()
+
             nexusSpec("snapshot") {
-                release.version.set("${extension.version}-SNAPSHOT")
                 repositoryUrl.set("https://central.sonatype.com/repository/maven-snapshots/")
                 auth {
                     user.set(secret("SONATYPE_USERNAME"))
@@ -104,7 +105,6 @@ class PublishingPlugin : Plugin<Project> {
             }
 
             centralPortalSpec {
-                release.version.set(extension.version)
                 auth {
                     user.set(secret("SONATYPE_USERNAME"))
                     password.set(secret("SONATYPE_PASSWORD"))
